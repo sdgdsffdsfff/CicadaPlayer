@@ -3,6 +3,7 @@
 //
 #define LOG_TAG "GLRender_OESContext"
 
+#include <utils/timer.h>
 #include "OESProgramContext.h"
 
 using namespace cicada;
@@ -40,8 +41,7 @@ OESProgramContext::~OESProgramContext() {
     AF_LOGD("~OESProgramContext");
     glDeleteTextures(1, &mOutTextureId);
     glDeleteProgram(mOESProgram);
-    if(mDecoderSurface != nullptr)
-    {
+    if (mDecoderSurface != nullptr) {
         delete mDecoderSurface;
         mDecoderSurface = nullptr;
     }
@@ -87,7 +87,6 @@ int OESProgramContext::initProgram() {
         return -1;
     }
 
-    createDecoderSurface();
     return 0;
 }
 
@@ -106,7 +105,9 @@ void OESProgramContext::updateRotate(IVideoRender::Rotate rotate) {
 }
 
 void OESProgramContext::updateWindowSize(int width, int height, bool windowChanged) {
-    if (mWindowWidth == width && mWindowHeight == height && !windowChanged) {
+    mWindowChanged = windowChanged;
+
+    if (mWindowWidth == width && mWindowHeight == height && !mWindowChanged) {
         return;
     }
 
@@ -121,18 +122,6 @@ void *OESProgramContext::getSurface() {
     }
 
     return mDecoderSurface->GetSurface();
-}
-
-void OESProgramContext::createDecoderSurface() {
-    glGenTextures(1, &mOutTextureId);
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, mOutTextureId);
-    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    mDecoderSurface = new DecoderSurface(nullptr);
-    mDecoderSurface->Init(mOutTextureId, nullptr);
 }
 
 void OESProgramContext::updateDrawRegion() {
@@ -344,14 +333,28 @@ int OESProgramContext::updateFrame(std::unique_ptr<IAFFrame> &frame) {
 
     frame = nullptr;
 
+    {
+        std::unique_lock<std::mutex> waitLock(mFrameAvailableMutex);
+        if (!mFrameAvailable) {
+            mFrameAvailableCon.wait_for(waitLock, std::chrono::milliseconds(10), [this]() {
+                return mFrameAvailable;
+            });
+        }
+
+        if (mFrameAvailable) {
+            mFrameAvailable = false;
+        } else if (mWindowChanged) {
+            AF_LOGW("frame not available after 10ms");
+            return -1;
+        }
+    }
+
     if (mRegionChanged) {
-        AF_LOGD("0918, mRegionChanged");
         updateDrawRegion();
         mRegionChanged = false;
     }
 
     if (mCoordsChanged) {
-        AF_LOGD("0918, mCoordsChanged");
         updateFlipCoords();
         mCoordsChanged = false;
     }
@@ -395,4 +398,31 @@ int OESProgramContext::updateFrame(std::unique_ptr<IAFFrame> &frame) {
 //    glDisableVertexAttribArray(texCoordIndex);
 
     return 0;
+}
+
+void OESProgramContext::onFrameAvailable() {
+    std::unique_lock<std::mutex> lock(mFrameAvailableMutex);
+    mFrameAvailable = true;
+}
+
+void OESProgramContext::createSurface() {
+    glDeleteTextures(1, &mOutTextureId);
+    if (mDecoderSurface != nullptr) {
+        delete mDecoderSurface;
+    }
+
+    glGenTextures(1, &mOutTextureId);
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, mOutTextureId);
+    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    mDecoderSurface = new DecoderSurface(this);
+    mDecoderSurface->Init(mOutTextureId, nullptr);
+
+    {
+        std::unique_lock<std::mutex> lock(mFrameAvailableMutex);
+        mFrameAvailable = false;
+    }
 }

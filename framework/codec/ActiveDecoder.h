@@ -15,6 +15,7 @@
 
 #include "IDecoder.h"
 #include <queue>
+#include <atomic>
 
 class ActiveDecoder : public Cicada::IDecoder {
 
@@ -71,20 +72,21 @@ protected:
 protected:
 #if AF_HAVE_PTHREAD
     afThread *mDecodeThread = nullptr;
-    std::atomic_bool  mRunning{false};
+    std::atomic_bool mRunning{false};
 #endif
 private:
 
-    bool bInputEOS{false};
+    std::atomic_bool bInputEOS{false};
     bool bSendEOS2Decoder{};
-    bool bDecoderEOS{false};
+    std::atomic_bool bDecoderEOS{false};
 #if AF_HAVE_PTHREAD
     std::condition_variable mSleepCondition{};
     std::queue<std::unique_ptr<IAFPacket>> mInputQueue{};
     std::queue<std::unique_ptr<IAFFrame>> mOutputQueue{};
-    int maxOutQueueSize = 16;
+    int maxOutQueueSize = 2;
     std::mutex mMutex{};
     std::mutex mSleepMutex{};
+    std::unique_ptr<IAFPacket> mPacket{nullptr};
 #endif
     bool bHolding = false;
     std::queue<std::unique_ptr<IAFPacket>> mHoldingQueue{};

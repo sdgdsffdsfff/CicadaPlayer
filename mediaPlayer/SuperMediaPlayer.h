@@ -60,7 +60,6 @@ namespace Cicada {
     typedef enum APP_STATUS {
         APP_FOREGROUND,
         APP_BACKGROUND,
-        APP_FOREGROUND_CATCHUP,
     } APP_STATUS;
 
 
@@ -346,7 +345,7 @@ namespace Cicada {
 
         void ProcessSwitchStreamMsg(int index) final;
 
-        void ProcessVideoRenderedMsg(int64_t pts, void *picUserData) final;
+        void ProcessVideoRenderedMsg(int64_t pts, int64_t timeMs, void *picUserData) final;
 
         void ProcessVideoCleanFrameMsg() final;
 
@@ -355,6 +354,8 @@ namespace Cicada {
         void ProcessAddExtSubtitleMsg(const std::string &url) final;
 
         void ProcessSelectExtSubtitleMsg(int index, bool select) final;
+
+        void ProcessSetSpeed(float speed) final;
 
 
     private:
@@ -385,7 +386,7 @@ namespace Cicada {
         BufferController mBufferController;
 
         std::mutex mAppStatusMutex;
-        APP_STATUS mAppStatus = APP_FOREGROUND;
+        std::atomic<APP_STATUS> mAppStatus{APP_FOREGROUND};
         std::unique_ptr<IAudioRender> mAudioRender{};
         std::unique_ptr<IVideoRender> mVideoRender{};
 //#ifdef WIN32
@@ -394,10 +395,10 @@ namespace Cicada {
         int mVideoWidth{0};
         int mVideoHeight{0};
         int mVideoRotation{0};
-        int64_t mDuration{0};
+        int64_t mDuration{INT64_MIN};
         int64_t mBufferPosition{0};
         PlayerStatus mOldPlayStatus{PLAYER_IDLE};
-        PlayerStatus mPlayStatus{PLAYER_IDLE};
+        atomic <PlayerStatus> mPlayStatus{PLAYER_IDLE};
         std::deque<std::unique_ptr<IAFPacket>> mSubtitleShowedQueue;
         std::deque<StreamInfo *> mStreamInfoQueue;
         StreamInfo **mStreamInfos{nullptr};
@@ -410,9 +411,9 @@ namespace Cicada {
         int mWillChangedSubtitleStreamIndex{-1};
         int mRemainLiveSegment{0};// To avoid access demuxer multi-thread
         bool mInited{false};
-        bool mSeekNeedCatch{false};
+        atomic_bool mSeekNeedCatch{false};
         const static int64_t SEEK_ACCURATE_MAX;
-        int64_t mSeekPos{INT64_MIN};
+        atomic <int64_t> mSeekPos{INT64_MIN};
         SystemReferClock mMasterClock;
         streamTime mAudioTime{INT64_MIN, 0};
         int64_t mPlayedVideoPts{INT64_MIN}; // sync pts
@@ -431,6 +432,7 @@ namespace Cicada {
         int64_t mRemovedFirstAudioPts{INT64_MIN};;
         int64_t mFirstSeekStartTime{0};
         bool mEof{false};
+        bool mSubtitleEOS{false};
         bool mLowMem{false};
         bool mSeekFlag{false};
         bool mSeekInCache{false};
@@ -447,7 +449,7 @@ namespace Cicada {
         bool mWillSwitchVideo{false};
         player_type_set mSet;
         int64_t mSoughtVideoPos{INT64_MIN};
-        int64_t mPlayingPosition{0};
+        std::atomic<int64_t> mPlayingPosition{0};
 
         int mMaxRunningLoopGap = 10;
         int mTimerInterval = 0;
@@ -476,6 +478,7 @@ namespace Cicada {
 
         bool dropLateVideoFrames = false;
         bool waitingForStart = false;
+        bool mBRendingStart {false};
     private:
 
         bool mAutoPlay = false;
@@ -493,6 +496,8 @@ namespace Cicada {
         void printTimePosition(int64_t time) const;
 
         void setUpAVPath();
+
+        void startRendering(bool start);
     };
 }// namespace Cicada
 #endif // CICADA_PLAYER_SERVICE_H

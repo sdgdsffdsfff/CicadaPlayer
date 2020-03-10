@@ -96,6 +96,7 @@ namespace Cicada {
         listener.Completion = completionCallback;
         listener.FirstFrameShow = firstFrameCallback;
         listener.VideoSizeChanged = videoSizeChangedCallback;
+        listener.VideoRendered = videoRenderedCallback;
         listener.PositionUpdate = currentPostionCallback;
         listener.BufferPositionUpdate = bufferPostionCallback;
         listener.LoadingStart = loadingStartCallback;
@@ -211,9 +212,19 @@ namespace Cicada {
             mCacheManager = new CacheManager();
             mCacheManager->setCacheConfig(mCacheConfig);
             mCacheManager->setSourceUrl(url);
-            char value[MAX_OPT_VALUE_LENGTH] = {0};
+
+            char descriptionLen[MAX_OPT_VALUE_LENGTH] = {0};
+            CicadaGetOption(handle, "descriptionLen", descriptionLen);
+            int len = atoi(descriptionLen);
+
+            char *value = static_cast<char *>(malloc(len + 1));
+            memset(value,0 , len+1);
+
             CicadaGetOption(handle, "description", value);
             mCacheManager->setDescription(value);
+
+            free(value);
+
             mCacheManager->setCacheFailCallback([this](int code, string msg) -> void {
                 AF_LOGE("Cache fail : code = %d , msg = %s", code, msg.c_str());
                 this->eventCallback(MEDIA_PLAYER_EVENT_CACHE_ERROR, msg.c_str(), this);
@@ -436,8 +447,8 @@ namespace Cicada {
             playerConfig.highBufferDuration = playerConfig.maxDelayTime;
         }
 
-        if (playerConfig.startBufferDuration > playerConfig.highBufferDuration) {
-            playerConfig.startBufferDuration = playerConfig.highBufferDuration;
+        if (playerConfig.startBufferDuration > playerConfig.maxBufferDuration) {
+            playerConfig.startBufferDuration = playerConfig.maxBufferDuration;
         }
 
         //must
@@ -761,6 +772,13 @@ namespace Cicada {
         }
     }
 
+    void  MediaPlayer::videoRenderedCallback(int64_t timeMs, int64_t pts, void *userData)
+    {
+        GET_MEDIA_PLAYER
+        player->mListener.VideoRendered(timeMs, pts, player->mListener.userData);
+    }
+
+
     void MediaPlayer::currentPostionCallback(int64_t position, void *userData)
     {
         GET_MEDIA_PLAYER
@@ -1035,16 +1053,18 @@ namespace Cicada {
         mPlayUrlChangedCallback = urlChangedCallbak;
     }
 
-    void MediaPlayer::onMediaFrameCallback(void *arg, const unique_ptr<IAFPacket>& frame, StreamType type)
+    void MediaPlayer::onMediaFrameCallback(void *arg, const unique_ptr<IAFPacket> &frame, StreamType type)
     {
         MediaPlayer *player = (MediaPlayer *)arg;
+
         if (nullptr == player) {
             return;
         }
+
         player->mediaFrameCallback(frame, type);
     }
 
-    void MediaPlayer::mediaFrameCallback(const unique_ptr<IAFPacket>& frame, StreamType type)
+    void MediaPlayer::mediaFrameCallback(const unique_ptr<IAFPacket> &frame, StreamType type)
     {
         if (mCacheManager) {
             mCacheManager->sendMediaFrame(frame, type);
@@ -1053,5 +1073,12 @@ namespace Cicada {
         if (mMediaFrameFunc) {
             mMediaFrameFunc(mMediaFrameArg, frame, type);
         }
+    }
+
+
+    void MediaPlayer::EnableVideoRenderedCallback(bool enable)
+    {
+        GET_PLAYER_HANDLE;
+        CicadaSetOption(handle, "enableVRC", enable ? "1" : "0");
     }
 }

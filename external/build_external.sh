@@ -6,19 +6,31 @@ PATH=$PATH:${BUILD_TOOLS_DIR}
 source ../build_tools/utils.sh
 source user_env.sh
 
-function patch_ffmpeg() {
-
-    cd ${FFMPEG_SOURCE_DIR}
-    git am ../../contribute/ffmpeg/0001-chore-win32-fix-not-find-openssl-1.1.1.patch
-
+function git_am_patch() {
+    git am $1
     if [ $? -ne 0 ]; then
         print_warning "patch error, may be patched"
         git am --abort
-        return 0;
     fi
-    git am ../../contribute/ffmpeg/0002-chore-avformat-change-MAX_PES_PAYLOAD-to-5M.patch
-    git am ../../contribute/ffmpeg/0003-chore-libavformat-exoport-some-functions.patch
-    git am ../../contribute/ffmpeg/0004-chore-fix-Linux-build.patch
+}
+
+function patch_ffmpeg() {
+
+    cd ${FFMPEG_SOURCE_DIR}
+    git_am_patch ../../contribute/ffmpeg/0001-chore-win32-fix-not-find-openssl-1.1.1.patch
+    git_am_patch ../../contribute/ffmpeg/0002-chore-avformat-change-MAX_PES_PAYLOAD-to-5M.patch
+    git_am_patch ../../contribute/ffmpeg/0003-chore-libavformat-exoport-some-functions.patch
+    git_am_patch ../../contribute/ffmpeg/0004-chore-fix-Linux-build.patch
+    git_am_patch ../../contribute/ffmpeg/0005-chore-disable-libdav1d-check.patch
+    git_am_patch ../../contribute/ffmpeg/0006-flv-add-extensions-for-H.265-HEVC.patch
+}
+
+function patch_dav1d() {
+    cd ${DAV1D_SOURCE_DIR}
+    git reset --hard 39667c751d427e447cbe8be783cfecd296659e24
+    if [[ "$TARGET_PLATFORM" == "iOS" ]];then
+        git_am_patch ../../contribute/dav1d/0001-chore-enable-bitcode.patch
+    fi
 }
 
 function load_source() {
@@ -92,6 +104,50 @@ function check_cmake(){
     fi
 #    brew upgrade cmake
 }
+
+function check_meson(){
+    if [ ! `which meson` ]
+    then
+        echo 'meson not found'
+        echo 'Trying to install meson...'
+        brew install meson || exit 1
+    fi
+#    brew upgrade meson
+}
+
+function check_ninja(){
+    if [ ! `which ninja` ]
+    then
+        echo 'ninja not found'
+        echo 'Trying to install ninja...'
+        brew install ninja || exit 1
+    fi
+#    brew upgrade ninja
+}
+
+function check_nasm(){
+    if [ ! `which nasm` ]
+    then
+        echo 'nasm not found'
+        echo 'Trying to install nasm...'
+        brew install nasm || exit 1
+    fi
+#    brew upgrade nasm
+}
+
+function check_dav1d(){
+    if [ -d "${DAV1D_SOURCE_DIR}" ]
+    then
+        check_meson
+        check_ninja
+        check_nasm
+        patch_dav1d
+        cd ${TOP_DIR}
+    else
+        echo "DAV1D_SOURCE_DIR not enable"
+    fi
+}
+
 function check_yasm(){
     if [ ! `which yasm` ]
     then
@@ -138,12 +194,14 @@ if [ "$1" == "Android" ];then
         export ANDROID_NDK=~/Android-env/android-ndk-r14b/
     fi
     check_android_tools
+    check_dav1d
     ../build_tools/build_Android.sh
 
 elif [ "$1" == "iOS" ];then
     #export HOMEBREW_NO_AUTO_UPDATE=true
     check_cmake
     check_yasm
+    check_dav1d
     ../build_tools/build_iOS.sh
 elif [ "$1" == "macOS" ];then
     ../build_tools/build_native.sh 

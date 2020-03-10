@@ -126,10 +126,11 @@ namespace Cicada {
         ~player_event()
         {
             if (!mKeepData && data) {
-                if (mRelease)
+                if (mRelease) {
                     mRelease(data);
-                else
+                } else {
                     free(data);
+                }
             }
         }
 
@@ -179,7 +180,7 @@ namespace Cicada {
 
     void PlayerNotifier::NotifyPosition(int64_t pos)
     {
-        AF_LOGI("NotifyPosition() :%lld", pos);
+        AF_LOGD("NotifyPosition() :%lld", pos);
 
         if (!mEnable || mListener.PositionUpdate == nullptr) {
             return;
@@ -206,6 +207,16 @@ namespace Cicada {
         }
 
         auto *event = new player_event(width, height, mListener.VideoSizeChanged);
+        pushEvent(event);
+    }
+
+    void PlayerNotifier::NotifyVideoRendered(int64_t timeMs, int64_t pts)
+    {
+        if (!mEnable || mListener.VideoRendered == nullptr) {
+            return;
+        }
+
+        auto *event = new player_event(timeMs, pts, mListener.VideoRendered);
         pushEvent(event);
     }
 

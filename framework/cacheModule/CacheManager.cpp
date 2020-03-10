@@ -7,6 +7,7 @@
 #include <utility>
 #include <utils/mediaTypeInternal.h>
 #include <vector>
+#include <utils/mediaFrame.h>
 
 CacheManager::CacheManager()
 {
@@ -88,7 +89,11 @@ void CacheManager::sendMediaFrame(const unique_ptr<IAFPacket> &frame, StreamType
             metaRet = mDataSource->getStreamMeta(videoMeta, StreamType::ST_TYPE_VIDEO);
 
             if (metaRet == 0) {
+                videoMeta->type = Stream_type::STREAM_TYPE_VIDEO;
                 streamMetas.push_back(videoMeta);
+            }else {
+                releaseMeta(videoMeta);
+                free(videoMeta);
             }
         }
         {
@@ -97,12 +102,17 @@ void CacheManager::sendMediaFrame(const unique_ptr<IAFPacket> &frame, StreamType
             metaRet = mDataSource->getStreamMeta(audioMeta, StreamType::ST_TYPE_AUDIO);
 
             if (metaRet == 0) {
+                audioMeta->type = Stream_type::STREAM_TYPE_AUDIO;
                 streamMetas.push_back(audioMeta);
+            } else {
+                releaseMeta(audioMeta);
+                free(audioMeta);
             }
         }
         mCacheModule.setStreamMeta(streamMetas);
         mCacheModule.setErrorCallback([this](int code, string msg) -> void{
             AF_LOGE("cacheModule error : code = %d , msg = %s ", code, msg.c_str());
+            mNeedProcessFrame = false;
 
             if (mCacheFailCallback != nullptr)
             {

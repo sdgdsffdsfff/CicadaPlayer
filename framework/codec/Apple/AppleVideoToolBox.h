@@ -105,19 +105,19 @@ namespace Cicada{
         int mInputCount{0};
         bool mThrowPacket{false};
         std::mutex mActiveStatusMutex;
-        bool mActive{true};
-        pix_fmt mVTOutFmt = AF_PIX_FMT_NONE;
+        std::atomic_bool mActive{true};
+        AFPixelFormat mVTOutFmt = AF_PIX_FMT_NONE;
         std::unique_ptr<streamMeta> mPInMeta{nullptr};
         std::queue<std::unique_ptr<IAFPacket>> mRecoveryQueue{};
         std::queue<std::unique_ptr<IAFPacket>> mRecoveringQueue{};
         std::unique_ptr<bitStreamParser> mParser{nullptr};
         uint8_t mPocDelta = 2;
-        int64_t mOutputPoc = 0;
+        std::atomic_int64_t mOutputPoc {0};
         bool mBUsePoc = false;
         std::queue<std::unique_ptr<IAFFrame>> mReorderedQueue{};
         std::mutex mReorderMutex{};
 
-        bool mResignActiveFromRunning{false};
+        bool mResignActive{false};
         bool mIsDummy = false;
     };
 

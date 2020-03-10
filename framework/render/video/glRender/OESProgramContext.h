@@ -9,7 +9,7 @@
 #include "platform/android/decoder_surface.h"
 #include "GLRender.h"
 
-class OESProgramContext : public IProgramContext {
+class OESProgramContext : public IProgramContext , private DecoderSurfaceCallback{
 public:
     OESProgramContext();
 
@@ -17,6 +17,8 @@ public:
 
 private:
     int initProgram() override;
+
+    void createSurface() override;
 
     void *getSurface() override;
 
@@ -32,11 +34,11 @@ private:
 
 private:
 
-    void createDecoderSurface();
-
     void updateFlipCoords();
 
     void updateDrawRegion();
+
+    void onFrameAvailable() override ;
 private:
 
     IVideoRender::Rotate mRotate = IVideoRender::Rotate_None;
@@ -45,6 +47,7 @@ private:
 
     int mWindowWidth  = 0;
     int mWindowHeight = 0;
+    bool mWindowChanged = false;
 
     double mDar = 1;
     int mFrameWidth = 0;
@@ -72,6 +75,9 @@ private:
     bool mRegionChanged = false;
     GLfloat mDrawRegion[12]={0.0f};
 
+    std::mutex mFrameAvailableMutex;
+    std::condition_variable mFrameAvailableCon;
+    bool mFrameAvailable = false;
 };
 
 

@@ -34,13 +34,16 @@ function build_curl(){
         export CFLAGS="-arch $2 -fembed-bitcode --sysroot=$SYSROOT -isysroot $SYSROOT -miphoneos-version-min=$DEPLOYMENT_TARGET"
         export LDFLAGS="-arch $2 --sysroot=$SYSROOT"
         export CC=clang
-        if [[ "${CURL_SSL_USE_NATIVE}" == "TRUE" ]];then
+        if [[ "${SSL_USE_NATIVE}" == "TRUE" ]];then
             ssl_opt="--with-darwinssl"
         fi
     elif [ "$1" == "win32" ];then
         cross_compile_set_platform_win32 $2
     elif [ "$1" == "Darwin" ];then
         LIBSDEPEND="LIBS=-lresolv"
+        if [[ "${SSL_USE_NATIVE}" == "TRUE" ]];then
+            ssl_opt="--with-darwinssl"
+        fi
         print_warning "native build for $1"
     elif [ "$1" == "Linux" ];then
         LIBSDEPEND="LIBS=-lresolv"
@@ -73,8 +76,8 @@ function build_curl(){
                 --without-libidn2 \
                 --without-librtmp \
                 --without-libidn"
-    local build_dir="build/curl/$1/$2"
-    local install_dir="$PWD/install/curl/$1/$2"
+    local build_dir="${CWD}/build/curl/$1/$2"
+    local install_dir="${CWD}/install/curl/$1/$2"
 
     mkdir -p ${build_dir}/
     if [ "${BUILD}" != "False" ];then

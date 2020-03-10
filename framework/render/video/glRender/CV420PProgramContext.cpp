@@ -112,10 +112,6 @@ int CV420PProgramContext::initProgram() {
     return 0;
 }
 
-void *CV420PProgramContext::getSurface() {
-    return nullptr;
-}
-
 void CV420PProgramContext::updateScale(IVideoRender::Scale scale) {
     if (mScale != scale) {
         mScale = scale;
@@ -178,6 +174,11 @@ int CV420PProgramContext::updateFrame(std::unique_ptr<IAFFrame> &frame) {
             updateColorRange();
             mColorRange = videoInfo.colorRange;
         }
+    }
+
+    if (frame == nullptr && !mProjectionChanged && !mRegionChanged && !mCoordsChanged) {
+        //frame is null and nothing changed , don`t need redraw. such as paused.
+        return -1;
     }
 
     if (mProjectionChanged) {

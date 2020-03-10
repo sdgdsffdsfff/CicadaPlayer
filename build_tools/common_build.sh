@@ -4,6 +4,7 @@ source build_x264.sh
 source build_openssl_111.sh
 source build_openssl.sh
 source build_curl.sh
+source build_dav1d.sh
 source build_fdk_aac.sh
 source ffmpeg_commands.sh
 source build_ffmpeg.sh
@@ -27,6 +28,7 @@ function apply_ffmpeg_config(){
 }
 function build_static_lib(){
     local arch=$2
+    export TARGET_ARCH=$2
     cd ${CWD}
 
     if [ -d "$BOOST_SOURCE_DIR" ];then
@@ -45,7 +47,14 @@ function build_static_lib(){
         print_warning "cares source not found"
     fi
 
-    if [ -d "${OPEN_SSL_SOURCE_DIR}" ];then
+    local build_openssl="true"
+    if [ "$1" == "iOS" ] || [ "$1" == "Darwin" ];then
+        if [ "${SSL_USE_NATIVE}" == "TRUE" ];then
+            build_openssl="false"
+        fi
+    fi
+
+    if [ -d "${OPEN_SSL_SOURCE_DIR}" ] && [ "${build_openssl}" == "true" ];then
         if [  "${OPENSSL_VERSION_111}" == "True" ];then
             build_openssl_111 $1 ${arch}
         else
@@ -97,6 +106,18 @@ function build_static_lib(){
         fi
     else
         print_warning "x264 source not found"
+    fi
+
+    if [ -d "${DAV1D_SOURCE_DIR}" ]
+    then
+        cd ${CWD}
+        build_dav1d $1 ${arch}
+        if [ $? -ne 0 ]; then
+            echo "build_dav1d build failed"
+            exit -1
+        fi
+    else
+        print_warning "dav1d source not found"
     fi
 
     if [ -d "${FFMPEG_SOURCE_DIR}" ]
@@ -181,6 +202,10 @@ function link_shared_lib_Android(){
 
     if [ -d "${OPENSSL_INSTALL_DIR}" ];then
         ldflags="$ldflags -lssl -lcrypto -L${OPENSSL_INSTALL_DIR}/lib/"
+    fi
+
+    if [ -d "${DAV1D_INSTALL_DIR}" ];then
+        ldflags="$ldflags -ldav1d -L${DAV1D_INSTALL_DIR}/lib/"
     fi
 
     if [ -d "${X264_INSTALL_DIR}" ];then

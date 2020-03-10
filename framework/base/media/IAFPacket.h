@@ -27,7 +27,8 @@ struct AFRational {
 
     AFRational &operator=(AVRational rational);
 };
-
+#define AF_PKT_FLAG_KEY     0x0001 ///< The packet contains a keyframe
+#define AF_PKT_FLAG_CORRUPT 0x0002 ///< The packet content is corrupted
 class CICADA_CPLUS_EXTERN IAFPacket {
 public:
     struct packetInfo {
@@ -131,7 +132,8 @@ public:
                    && this->channels == info.channels
                    && this->format == info.format
                    && this->channel_layout == info.channel_layout
-                   && this->nb_samples == info.nb_samples;
+         //          && this->nb_samples == info.nb_samples
+                   ;
         }
 
         bool operator!=(const audioInfo &info) const

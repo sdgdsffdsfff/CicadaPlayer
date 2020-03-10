@@ -8,6 +8,7 @@
 
 #include <MediaPlayer.h>
 #include <vector>
+#include <mutex>
 
 class player_command {
 public:
@@ -19,6 +20,7 @@ public:
         setSpeed,
         setVolume,
         selectStream,
+        backGround,
     };
 
     player_command() = default;
@@ -29,7 +31,7 @@ public:
     }
 
     command mID{null};
-    int timestamp{0};
+    int64_t timestamp{0};
     int arg0{};
 
 };
@@ -43,7 +45,8 @@ public:
     }
 
     std::vector<player_command> &mCommands;
-    bool mExitOnEmpty{true};
+    std::mutex mMutex;
+    std::atomic_bool mExitOnEmpty{true};
 };
 
 int command_loop(Cicada::MediaPlayer *player, void *arg);

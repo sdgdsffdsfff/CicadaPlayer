@@ -199,12 +199,13 @@ void CacheModule::stop()
         if (mCacheFileRemuxer != nullptr) {
             mCacheFileRemuxer->interrupt();
             mCacheFileRemuxer->stop();
+            bool remuxSuc = mCacheFileRemuxer->isRemuxSuccess();
             delete mCacheFileRemuxer;
             mCacheFileRemuxer = nullptr;
             const string &cachePath = mCachePath.getCachePath();
             string cacheTmpPath = cachePath + TMP_SUFFIX;
 
-            if (mEos) {
+            if (mEos && remuxSuc) {
                 // completion , rename file
                 int ret = FileUtils::Rename(cacheTmpPath.c_str(), cachePath.c_str());
 
@@ -258,6 +259,7 @@ void CacheModule::clearStreamMetas()
     if (!mStreamMetas.empty()) {
         for (auto &item : mStreamMetas) {
             releaseMeta(item);
+            free(item);
         }
 
         mStreamMetas.clear();

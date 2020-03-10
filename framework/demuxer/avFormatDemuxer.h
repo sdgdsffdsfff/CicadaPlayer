@@ -56,6 +56,8 @@ namespace Cicada {
 
         void Start() override;
 
+        void PreStop() override;
+
         void Stop() override;
 
         void flush() override;
@@ -126,15 +128,14 @@ namespace Cicada {
         bool bFillExtraData{false};
         int64_t mStartTime = INT64_MIN;
         std::deque<unique_ptr<IAFPacket>> mPacketQueue{};
-        bool bEOS{false};
-        std::atomic_bool  bPaused{false};
+        std::atomic_bool bEOS{false};
+        std::atomic_bool bPaused{false};
 #if AF_HAVE_PTHREAD
         afThread *mPthread{nullptr};
         std::mutex mMutex{};
         std::mutex mQueLock{};
         std::condition_variable mQueCond{};
-
-        int64_t mError = 0;
+        atomic <int64_t> mError{0};
 #endif
 
     };

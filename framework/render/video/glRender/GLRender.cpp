@@ -38,6 +38,7 @@ GLRender::GLRender(float Hz)
     mVSyncPeriod = static_cast<int64_t>(1000000 / Hz);
 #if TARGET_OS_IPHONE
     IOSNotificationManager::Instance()->RegisterObserver(this, 0);
+    mInBackground = IOSNotificationManager::Instance()->GetActiveStatus() == 0;
     setenv("METAL_DEVICE_WRAPPER_TYPE", "0", 1);
 //   setenv("CG_CONTEXT_SHOW_BACKTRACE", "1", 1);
 #endif
@@ -56,12 +57,13 @@ GLRender::~GLRender()
 int GLRender::init()
 {
     AF_LOGD("-----> init .");
-    mVSync->start();
-//    std::unique_lock<std::mutex> locker(mInitMutex);
-//    mInitCondition.wait(locker, [this]() -> int {
-//        return mInitRet != INT32_MIN;
-//    });
-//    return mInitRet;
+    // don't auto start in background
+    std::unique_lock<std::mutex> locker(mInitMutex);
+
+    if (!mInBackground) {
+        mVSync->start();
+    }
+
     return 0;
 }
 
@@ -210,7 +212,7 @@ void GLRender::calculateFPS(int64_t tick)
             mRendertimeS++;
         }
 
-        AF_LOGI("video fps is %llu\n", mRenderCount);
+        AF_LOGD("video fps is %llu\n", mRenderCount);
         mFps = mRenderCount;
         mRenderCount = 0;
     }
@@ -260,6 +262,7 @@ bool GLRender::renderActually()
 
     if (needCreateOutTexture) {
         IProgramContext *programContext = getProgram(AF_PIX_FMT_CICADA_MEDIA_CODEC);
+        programContext->createSurface();
         needCreateOutTexture = false;
         mCreateOutTextureCondition.notify_all();
     }
@@ -379,7 +382,6 @@ bool GLRender::renderActually()
         mContext->Present(mGLSurface);
 
         if (mProgramContext != nullptr) {
-            mPrograms.erase(mProgramFormat);
             mProgramFormat = -1;
             mProgramContext = nullptr;
         }
@@ -528,6 +530,7 @@ void GLRender::setSpeed(float speed)
 
 void GLRender::AppWillResignActive()
 {
+    std::unique_lock<std::mutex> locker(mInitMutex);
     mInBackground = true;
     AF_LOGE("0919, mInBackground = true");
     mVSync->pause();
@@ -535,6 +538,7 @@ void GLRender::AppWillResignActive()
 
 void GLRender::AppDidBecomeActive()
 {
+    std::unique_lock<std::mutex> locker(mInitMutex);
     mInBackground = false;
     AF_LOGE("0919, mInBackground = false");
     mVSync->start();

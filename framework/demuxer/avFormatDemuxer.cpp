@@ -80,7 +80,7 @@ namespace Cicada {
         int64_t startTime = af_getsteady_ms();
         bool use_filename = false;
 
-        if (mReadCb != nullptr) {
+        if (mReadCb != nullptr ) {
             uint8_t *read_buffer = static_cast<uint8_t *>(av_malloc(INITIAL_BUFFER_SIZE));
             mPInPutPb = avio_alloc_context(read_buffer, INITIAL_BUFFER_SIZE, 0, mUserArg, mReadCb, nullptr, mSeekCb);
 
@@ -94,6 +94,8 @@ namespace Cicada {
             use_filename = true;
         }
 
+        av_dict_set_int(&mInputOpts, "safe", 0, 0);
+        av_dict_set(&mInputOpts, "protocol_whitelist", "file,http,https,tcp,tls", 0);
         /*If a url with mp4 ext name, but is not a mp4 file, the mp4 demuxer will be matched
          * by ext name , mp4 demuxer will try to find moov box, it will ignore the return value
          * of the avio_*, and don't check interrupt flag, if the url is a network file, here will
@@ -144,6 +146,22 @@ namespace Cicada {
         // TODO: add a opt to set fps probe
         mCtx->fps_probe_size = 0;
         // TODO: only find ts and flv's info?
+
+        if (mMetaInfo) {
+            for (int i = 0; i < mCtx->nb_streams; ++i) {
+                if (i >= mMetaInfo->meta.size()) {
+                    break;
+                }
+
+                set_stream_meta(mCtx->streams[i], (Stream_meta *) *mMetaInfo->meta[i].get());
+            }
+
+            // TODO: set it to zero can avoid read and decode more frames,but wen seek to back in hlsstream,will lead pts err
+            if (mMetaInfo->bContinue) {
+                mCtx->max_ts_probe = 0;
+            }
+        }
+
         ret = avformat_find_stream_info(mCtx, nullptr);
 
         if (mInterrupted) {
@@ -214,7 +232,7 @@ namespace Cicada {
             err = av_read_frame(mCtx, pkt);
 
             if (err < 0) {
-                if (err != AVERROR(EAGAIN)&& mCtx->pb->error != AVERROR_EXIT) {
+                if (err != AVERROR(EAGAIN) && mCtx->pb->error != AVERROR_EXIT) {
                     if (mCtx->pb) {
                         av_log(NULL, AV_LOG_WARNING, "%s:%d: %s, ctx->pb->error=%d\n", __FILE__, __LINE__, getErrorString(err),
                                mCtx->pb->error);
@@ -228,12 +246,12 @@ namespace Cicada {
                 }
 
                 if (err == AVERROR_EOF) {
-                    if (mCtx->pb->error == AVERROR(EAGAIN)) {
+                    if (mCtx->pb && mCtx->pb->error == AVERROR(EAGAIN)) {
                         av_packet_free(&pkt);
                         return mCtx->pb->error;
                     }
 
-                    if (mCtx->pb->error < 0) {
+                    if (mCtx->pb && mCtx->pb->error < 0) {
                         av_packet_free(&pkt);
                         int ret = mCtx->pb->error;
                         mCtx->pb->error = 0;
@@ -577,6 +595,11 @@ namespace Cicada {
             if (ret != AVERROR(EAGAIN) && ret != FRAMEWORK_ERR_EXIT) {
                 mError = ret;
             }
+
+            std::unique_lock<std::mutex> waitLock(mQueLock);
+            mQueCond.wait_for(waitLock, std::chrono::milliseconds(10), [this]() {
+                return bPaused || mInterrupted;
+            });
         }
 
         return 0;
@@ -657,6 +680,14 @@ namespace Cicada {
     {
         addPrototype(this);
         ffmpeg_init();
+    }
+
+    void avFormatDemuxer::PreStop()
+    {
+#if AF_HAVE_PTHREAD
+        bPaused = true;
+        mQueCond.notify_one();
+#endif
     }
 
 }
